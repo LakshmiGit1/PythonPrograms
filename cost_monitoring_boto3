@@ -1,0 +1,37 @@
+#program to check and delete snpshots that is not attached to any volume or delete a snapshot that has volume but not attached to any ec2 instances
+
+import json
+import boto3
+
+def lambda_handler(event, context):
+    # TODO implement
+
+    client = boto3.client('ec2')
+    
+    #get all the snapshots
+    snapshots_response = client.describe_snapshots(OwnerIds=['self'])
+    #print ("The ******* snapshots are ", snapshots)
+    
+    for snapshots in snapshots_response['Snapshots']:
+        snap_id = snapshots['SnapshotId']
+        volume_id = snapshots['VolumeId'] 
+       
+        #if snapshot has no volume then it is orphan so delete the snapshot  
+        if not volume_id:
+            client.delete_snapshot(SnapshotId=snap_id)
+            print(f"The snapshot {snap_id} was not attached to any volume - deleted")
+        else:
+            #check if volume is attached to any EC2 instance
+            try:
+                volume_response = client.describe_volumes(VolumeIds=[volume_id])
+                if not volume_response['Volumes'][0]['Attachments']:
+                    client.delete_snapshot(SnapshotId=snap_id)
+            except client.exceptions.ClientError as e:
+                if e.response['Error']['Code'] == 'InvalidVolume.NotFound':
+                    # The volume associated with the snapshot is not found (it might have been deleted)
+                    client.delete_snapshot(SnapshotId=snapshot_id)
+                    print(f"Deleted EBS snapshot {snapshot_id} as its associated volume was not found.")      
+
+
+    
+    
